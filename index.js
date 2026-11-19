@@ -1,85 +1,76 @@
-require ('dotenv').config(); // create .env file and add your TOKEN, SERVER_URL, AUTH_KEY  
+require('dotenv').config();
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const qs = require('qs');
 
-const {TOKEN, SERVER_URL, AUTH_KEY} = process.env; //need to get bot TOKEN from telegram @botFather, SERVER_URL from heroku('https://yourAppName.herokuapp.com), AUTH_KEY from translator app  
-const TELEGRAM_API = `https://api.telegram.org/bot${TOKEN}`;
-const URI = `/webhook/${TOKEN}`;
-const WEBHOOK_URL = SERVER_URL + URI;
-
+const { TOKEN, SERVER_URL, AUTH_KEY } = process.env;
+const port = process.env.PORT || 8080;
+const telegramApi = `https://api.telegram.org/bot${TOKEN}`;
+const webhookPath = `/webhook/${TOKEN}`;
 const app = express();
+
 app.use(bodyParser.json());
 
-const init = async () =>{
-    try {
-    const res = await axios.get(`${TELEGRAM_API}/setWebhook?url=${WEBHOOK_URL}`);
-    console.log(res.data);
+async function processMessage(message) {
+    if (!message || message.from?.is_bot) {
+        return;
     }
-    catch (error)
-    {
-        console.log(error);
+
+    if (typeof message.text === 'string') {
+        const response = await axios.post(
+            'https://api-free.deepl.com/v2/translate',
+            qs.stringify({ auth_key: AUTH_KEY, text: message.text, target_lang: 'UK' }),
+            { timeout: 15000 }
+        );
+        const translation = response.data.translations[0].text;
+
+        await axios.post(`${telegramApi}/sendMessage`, {
+            chat_id: message.chat.id,
+            text: translation,
+        }, { timeout: 15000 });
+    } else if (message.sticker) {
+        await axios.post(`${telegramApi}/sendSticker`, {
+            chat_id: message.chat.id,
+            sticker: message.sticker.file_id,
+        }, { timeout: 15000 });
     }
 }
-app.post(URI, async (req, res) => {
+
+app.post(webhookPath, async (request, response) => {
     try {
-        const bodyReq = req.body; 
-        console.log(bodyReq);
-            if('channel_post' in bodyReq) // if bot is on channel it will translate administrators posts
-            {
-                const text = bodyReq.channel_post.text;
-                const chatId = bodyReq.channel_post.chat.id;
-                if (typeof(text) !== 'undefined') {
-                    axios.post(`https://api-free.deepl.com/v2/translate`,
-                    qs.stringify({'auth_key': AUTH_KEY, 'text': text, 'target_lang':'UK'}))
-                    .then(function (response) {
-                        const arr = response.data.translations;
-                        const translatedWord = arr.map(a => a.text)[0]; 
-                        axios.post(`${TELEGRAM_API}/sendMessage`, {
-                            chat_id: chatId,
-                            text: translatedWord
-                        });
-                });
-                } else if (typeof(bodyReq.channel_post.sticker) !== "undefined"){
-                    axios.post(`${TELEGRAM_API}/sendSticker`, {
-                        chat_id: chatId,
-                        sticker: bodyReq.channel_post.sticker.file_id
-                    });
-                } 
-            }
-            else if("message" in bodyReq)
-            {
-                const text = bodyReq.message.text; 
-                const chatId = bodyReq.message.chat.id 
-                if (typeof(text) !== 'undefined') 
-                {
-                    axios.post(`https://api-free.deepl.com/v2/translate`, 
-                    qs.stringify({'auth_key': AUTH_KEY, 'text': text, 'target_lang':'UK'}))
-                    .then(function (response) {
-                    const arr = response.data.translations;
-                    const translatedWord = arr.map(a => a.text)[0];
-                        axios.post(`${TELEGRAM_API}/sendMessage`, {
-                            chat_id: chatId,
-                            text: translatedWord
-                        });
-                    });    
-                } 
-                else if (typeof(bodyReq.message.sticker) !== "undefined"){
-                    axios.post(`${TELEGRAM_API}/sendSticker`, {
-                        chat_id: chatId,
-                        sticker: bodyReq.message.sticker.file_id
-                    });
-                }
-            }     
-    return res.send();
-    }
-    catch (error) {
-        console.log(error);
+        await processMessage(request.body.message || request.body.channel_post);
+        response.sendStatus(200);
+    } catch (error) {
+        // Axios errors can contain credentials and message bodies in their request config.
+        console.error('Message processing failed', error.response?.status || error.code || 'unknown');
+        response.sendStatus(502);
     }
 });
 
-app.listen(process.env.PORT || 8080, async () => {
-    console.log("App run on port", process.env.PORT || 8080);
-    await init();
-});
+async function start() {
+    if (!TOKEN || !SERVER_URL || !AUTH_KEY) {
+        throw new Error('Set TOKEN, SERVER_URL and AUTH_KEY in your environment.');
+    }
+    if (new URL(SERVER_URL).protocol !== 'https:') {
+        throw new Error('SERVER_URL must use HTTPS.');
+    }
+
+    await axios.post(`${telegramApi}/setWebhook`, {
+        url: SERVER_URL.replace(/\/+$/, '') + webhookPath,
+    }, { timeout: 15000 });
+
+    return app.listen(port, () => {
+        console.log(`Ukrainian translator listening on port ${port}`);
+    });
+}
+
+if (require.main === module) {
+    start().catch((error) => {
+        console.error('Startup failed', error.response?.status || error.code || error.message);
+        process.exitCode = 1;
+    });
+}
+
+module.exports = { app, start };

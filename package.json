@@ -1,23 +1,23 @@
 {
-  "name": "y",
+  "name": "telegram-ukrainian-translator",
   "version": "1.0.0",
-  "description": "telegram_bot",
+  "description": "Telegram webhook bot that translates messages into Ukrainian with DeepL.",
   "main": "index.js",
   "scripts": {
-    "test": "alert('hello');",
+    "test": "node --check index.js",
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/Roman-Gal/Telegram_UKR_bot.git"
+    "url": "git+https://github.com/Roman-Gal/telegram-ukrainian-translator.git"
   },
   "author": "Roman Halaiko",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Roman-Gal/Telegram_UKR_bot/issues"
+    "url": "https://github.com/Roman-Gal/telegram-ukrainian-translator/issues"
   },
-  "homepage": "https://github.com/Roman-Gal/Telegram_UKR_bot#readme",
+  "homepage": "https://github.com/Roman-Gal/telegram-ukrainian-translator#readme",
   "dependencies": {
     "axios": "^0.27.2",
     "body-parser": "^1.20.0",
@@ -25,5 +25,8 @@
     "express": "^4.18.1",
     "nodemon": "^2.0.19",
     "qs": "^6.11.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
